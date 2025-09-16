@@ -1,10 +1,10 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { SHOPS, OFFERS, PRODUCTS } from '../constants';
+import { getShops, getOffers, getAllProducts } from '../services/firebaseService';
 import Card from './common/Card';
 import { BuildingStorefrontIcon, TagIcon, ListBulletIcon } from './icons';
-import { type View } from '../types';
+import { type View, type Shop, type Offer, type Product } from '../types';
 
 interface DashboardProps {
     setView: (view: View) => void;
@@ -25,7 +25,28 @@ const StatCard: React.FC<{ icon: React.ElementType; title: string; value: string
 );
 
 const Dashboard: React.FC<DashboardProps> = ({ setView }) => {
-  const shopsByFloor = SHOPS.reduce((acc, shop) => {
+  const [shops, setShops] = useState<Shop[]>([]);
+  const [offers, setOffers] = useState<Offer[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      const [shopsData, offersData, productsData] = await Promise.all([
+        getShops(),
+        getOffers(),
+        getAllProducts(),
+      ]);
+      setShops(shopsData);
+      setOffers(offersData);
+      setProducts(productsData);
+      setLoading(false);
+    };
+    fetchData();
+  }, []);
+
+  const shopsByFloor = shops.reduce((acc, shop) => {
     const floor = `Floor ${shop.floor}`;
     if (!acc[floor]) {
       acc[floor] = 0;
@@ -39,14 +60,18 @@ const Dashboard: React.FC<DashboardProps> = ({ setView }) => {
     shops: shopsByFloor[floor],
   }));
 
+  if (loading) {
+    return <div className="text-center p-8">Loading dashboard...</div>;
+  }
+
   return (
     <div className="space-y-8">
       <h1 className="text-4xl font-bold text-gray-900">Dashboard</h1>
       
       <div className="flex gap-6">
-          <StatCard icon={BuildingStorefrontIcon} title="Total Shops" value={SHOPS.length} color="indigo" onClick={() => setView('shops')} />
-          <StatCard icon={TagIcon} title="Active Offers" value={OFFERS.length} color="amber" onClick={() => setView('offers')} />
-          <StatCard icon={ListBulletIcon} title="Listed Products" value={PRODUCTS.length} color="emerald" />
+          <StatCard icon={BuildingStorefrontIcon} title="Total Shops" value={shops.length} color="indigo" onClick={() => setView('shops')} />
+          <StatCard icon={TagIcon} title="Active Offers" value={offers.length} color="amber" onClick={() => setView('offers')} />
+          <StatCard icon={ListBulletIcon} title="Listed Products" value={products.length} color="emerald" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
@@ -73,8 +98,8 @@ const Dashboard: React.FC<DashboardProps> = ({ setView }) => {
         <Card className="lg:col-span-2">
             <h2 className="text-xl font-bold text-gray-800 mb-4">Recent Offers</h2>
             <ul className="space-y-4">
-                {OFFERS.slice(0, 3).map(offer => {
-                    const shop = SHOPS.find(s => s.id === offer.shopId);
+                {offers.slice(0, 3).map(offer => {
+                    const shop = shops.find(s => s.id === offer.shopId);
                     return (
                         <li key={offer.id} className="flex items-center p-2 rounded-lg hover:bg-gray-50">
                             <div className="p-2 bg-amber-100 rounded-full">

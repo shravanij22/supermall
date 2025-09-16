@@ -1,20 +1,18 @@
-
-import React, { useState } from 'react';
-import { OFFERS, SHOPS } from '../constants';
+import React, { useState, useEffect } from 'react';
+import { getOffers, getShops, addOffer } from '../services/firebaseService';
 import Card from './common/Card';
 import Button from './common/Button';
 import Modal from './common/Modal';
 import { PlusIcon, SparklesIcon, ArrowPathIcon } from './icons';
-import { type Offer } from '../types';
+import { type Offer, type Shop } from '../types';
 import { generateOfferDescription } from '../services/geminiService';
 
-const OfferCard: React.FC<{ offer: Offer }> = ({ offer }) => {
-  const shop = SHOPS.find(s => s.id === offer.shopId);
+const OfferCard: React.FC<{ offer: Offer, shop?: Shop }> = ({ offer, shop }) => {
   return (
     <Card className="flex flex-col">
       <div className="flex items-start justify-between">
           <div>
-            <p className="text-sm font-bold text-amber-600">{offer.discount} OFF</p>
+            <p className="text-sm font-bold text-amber-600">{offer.discount}</p>
             <h3 className="text-xl font-bold text-gray-900 mt-1">{offer.title}</h3>
             <p className="text-sm text-indigo-600 font-semibold mt-1">{shop?.name}</p>
           </div>
@@ -29,27 +27,50 @@ const OfferCard: React.FC<{ offer: Offer }> = ({ offer }) => {
 };
 
 const OfferList: React.FC = () => {
-  const [offers, setOffers] = useState<Offer[]>(OFFERS);
+  const [offers, setOffers] = useState<Offer[]>([]);
+  const [shops, setShops] = useState<Shop[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [aiDescription, setAiDescription] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [keywords, setKeywords] = useState('');
 
-  const handleAddOffer = (e: React.FormEvent<HTMLFormElement>) => {
+  useEffect(() => {
+    const fetchData = async () => {
+        setLoading(true);
+        const [offersData, shopsData] = await Promise.all([getOffers(), getShops()]);
+        setOffers(offersData);
+        setShops(shopsData);
+        setLoading(false);
+    };
+    fetchData();
+  }, []);
+
+  const handleAddOffer = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setIsSubmitting(true);
+
     const formData = new FormData(e.currentTarget);
-    const newOffer: Offer = {
-      id: `o${offers.length + 1}`,
+    const newOfferData: Omit<Offer, 'id'> = {
       title: formData.get('title') as string,
       shopId: formData.get('shopId') as string,
       discount: formData.get('discount') as string,
       description: formData.get('description') as string,
       validUntil: formData.get('validUntil') as string,
     };
-    setOffers(prev => [...prev, newOffer]);
-    setIsModalOpen(false);
-    setAiDescription('');
-    setKeywords('');
+
+    try {
+        const addedOffer = await addOffer(newOfferData);
+        setOffers(prev => [...prev, addedOffer]);
+        setIsModalOpen(false);
+        setAiDescription('');
+        setKeywords('');
+    } catch (error) {
+        console.error("Failed to add offer:", error);
+    } finally {
+        setIsSubmitting(false);
+    }
   };
 
   const handleGenerateDescription = async () => {
@@ -58,6 +79,10 @@ const OfferList: React.FC = () => {
     setAiDescription(description);
     setIsGenerating(false);
   };
+
+  if (loading) {
+      return <div className="text-center p-8">Loading offers...</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -71,7 +96,7 @@ const OfferList: React.FC = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {offers.map(offer => (
-          <OfferCard key={offer.id} offer={offer} />
+          <OfferCard key={offer.id} offer={offer} shop={shops.find(s => s.id === offer.shopId)} />
         ))}
       </div>
 
@@ -80,9 +105,9 @@ const OfferList: React.FC = () => {
           <input name="title" placeholder="Offer Title" required className="w-full p-2 border rounded" />
           <select name="shopId" required className="w-full p-2 border rounded bg-white">
             <option value="">Select a Shop</option>
-            {SHOPS.map(shop => <option key={shop.id} value={shop.id}>{shop.name}</option>)}
+            {shops.map(shop => <option key={shop.id} value={shop.id}>{shop.name}</option>)}
           </select>
-          <input name="discount" placeholder="Discount (e.g., 25%)" required className="w-full p-2 border rounded" />
+          <input name="discount" placeholder="Discount (e.g., 25% or BOGO)" required className="w-full p-2 border rounded" />
           <input name="validUntil" type="date" required className="w-full p-2 border rounded" />
           
           <div className="space-y-2 p-3 bg-indigo-50 rounded-lg border border-indigo-200">
@@ -113,8 +138,10 @@ const OfferList: React.FC = () => {
           />
           
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="secondary" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-            <Button type="submit">Save Offer</Button>
+            <Button type="button" variant="secondary" onClick={() => setIsModalOpen(false)} disabled={isSubmitting}>Cancel</Button>
+            <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? 'Saving...' : 'Save Offer'}
+            </Button>
           </div>
         </form>
       </Modal>

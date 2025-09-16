@@ -1,11 +1,26 @@
-import React, { useState } from 'react';
-import { PRODUCTS, SHOPS } from '../constants';
-import { type Product } from '../types';
+
+import React, { useState, useEffect } from 'react';
+import { getAllProducts, getShops } from '../services/firebaseService';
+import { type Product, type Shop } from '../types';
 import Button from './common/Button';
 import Card from './common/Card';
 
 const ProductComparison: React.FC = () => {
   const [selectedProducts, setSelectedProducts] = useState<Product[]>([]);
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [shops, setShops] = useState<Shop[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+      const fetchData = async () => {
+          setLoading(true);
+          const [productsData, shopsData] = await Promise.all([getAllProducts(), getShops()]);
+          setAllProducts(productsData);
+          setShops(shopsData);
+          setLoading(false);
+      };
+      fetchData();
+  }, []);
 
   const handleSelectProduct = (product: Product) => {
     setSelectedProducts(prev => {
@@ -19,7 +34,11 @@ const ProductComparison: React.FC = () => {
     });
   };
 
-  const getShopName = (shopId: string) => SHOPS.find(s => s.id === shopId)?.name || 'Unknown Shop';
+  const getShopName = (shopId: string) => shops.find(s => s.id === shopId)?.name || 'Unknown Shop';
+
+  if (loading) {
+    return <div className="text-center p-8">Loading products...</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -29,7 +48,7 @@ const ProductComparison: React.FC = () => {
       <Card>
         <h2 className="text-xl font-bold text-gray-800 mb-4">Select Products</h2>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {PRODUCTS.map(product => {
+          {allProducts.map(product => {
             const isSelected = selectedProducts.some(p => p.id === product.id);
             return (
               <div

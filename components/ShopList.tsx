@@ -1,6 +1,5 @@
-
-import React, { useState } from 'react';
-import { SHOPS } from '../constants';
+import React, { useState, useEffect } from 'react';
+import { getShops, addShop } from '../services/firebaseService';
 import Card from './common/Card';
 import Button from './common/Button';
 import Modal from './common/Modal';
@@ -19,31 +18,55 @@ const ShopCard: React.FC<{ shop: Shop }> = ({ shop }) => (
 );
 
 const ShopList: React.FC = () => {
-  const [shops, setShops] = useState<Shop[]>(SHOPS);
+  const [shops, setShops] = useState<Shop[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  useEffect(() => {
+    const fetchShops = async () => {
+      setLoading(true);
+      const shopsData = await getShops();
+      setShops(shopsData);
+      setLoading(false);
+    };
+    fetchShops();
+  }, []);
 
   const filteredShops = shops.filter(shop =>
     shop.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     shop.category.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleAddShop = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleAddShop = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setIsSubmitting(true);
     const formData = new FormData(e.currentTarget);
-    const newShop: Shop = {
-      id: `s${shops.length + 1}`,
+    const newShopData: Omit<Shop, 'id'> = {
       name: formData.get('name') as string,
       category: formData.get('category') as string,
       floor: parseInt(formData.get('floor') as string),
       description: formData.get('description') as string,
-      logoUrl: `https://picsum.photos/seed/s${shops.length + 1}/100`,
-      // Fix: Added missing coverImageUrl property required by the Shop type.
-      coverImageUrl: `https://picsum.photos/seed/c${shops.length + 1}/1200/400`,
+      logoUrl: `https://picsum.photos/seed/s${shops.length + 1}${Date.now()}/100`,
+      coverImageUrl: `https://picsum.photos/seed/c${shops.length + 1}${Date.now()}/1200/400`,
     };
-    setShops(prev => [...prev, newShop]);
-    setIsModalOpen(false);
+
+    try {
+      const addedShop = await addShop(newShopData);
+      setShops(prev => [...prev, addedShop]);
+      setIsModalOpen(false);
+    } catch (error) {
+      console.error("Failed to add shop:", error);
+      // Here you could show an error message to the user
+    } finally {
+      setIsSubmitting(false);
+    }
   };
+
+  if (loading) {
+    return <div className="text-center p-8">Loading shops...</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -76,8 +99,10 @@ const ShopList: React.FC = () => {
           <input name="floor" type="number" placeholder="Floor" required className="w-full p-2 border rounded" />
           <textarea name="description" placeholder="Description" required className="w-full p-2 border rounded" />
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="secondary" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-            <Button type="submit">Save Shop</Button>
+            <Button type="button" variant="secondary" onClick={() => setIsModalOpen(false)} disabled={isSubmitting}>Cancel</Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? 'Saving...' : 'Save Shop'}
+            </Button>
           </div>
         </form>
       </Modal>

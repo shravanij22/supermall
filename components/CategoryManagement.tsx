@@ -1,12 +1,10 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Card from './common/Card';
-// Fix: Removed CATEGORIES import as it's not exported from constants.
-import { SHOPS } from '../constants';
-// Fix: Imported icons needed for the local CATEGORIES constant.
+import { getShops } from '../services/firebaseService';
+import { type Shop } from '../types';
 import { DesktopComputerIcon, HomeIcon, TagIcon } from './icons';
 
-// Fix: Defined CATEGORIES locally to avoid circular dependencies and fix import error.
 const CATEGORIES = [
     { id: 'cat1', name: 'Electronics', icon: DesktopComputerIcon },
     { id: 'cat2', name: 'Fashion', icon: TagIcon },
@@ -14,7 +12,24 @@ const CATEGORIES = [
 ];
 
 const CategoryManagement: React.FC = () => {
-    const floors = [...new Set(SHOPS.map(s => s.floor))].sort((a,b) => a-b);
+    const [shops, setShops] = useState<Shop[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchShops = async () => {
+            setLoading(true);
+            const shopsData = await getShops();
+            setShops(shopsData);
+            setLoading(false);
+        };
+        fetchShops();
+    }, []);
+
+    const floors = [...new Set(shops.map(s => s.floor))].sort((a,b) => a-b);
+
+    if (loading) {
+        return <div className="text-center p-8">Loading categories...</div>;
+    }
 
     return (
         <div className="space-y-8">
@@ -38,7 +53,7 @@ const CategoryManagement: React.FC = () => {
                     <Card key={floorNum}>
                         <h3 className="text-xl font-bold text-gray-700 mb-4">Floor {floorNum}</h3>
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                            {SHOPS.filter(s => s.floor === floorNum).map(shop => (
+                            {shops.filter(s => s.floor === floorNum).map(shop => (
                                 <div key={shop.id} className="p-3 bg-indigo-50 rounded-lg flex items-center space-x-3">
                                     <img src={shop.logoUrl} alt={shop.name} className="w-10 h-10 rounded-full object-cover"/>
                                     <div>
